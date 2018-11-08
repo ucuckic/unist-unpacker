@@ -13,7 +13,7 @@ namespace unistunpacker
         {
             for(int i = 0; i < args.Length; i++)
             {
-                meth.dumpfiles(File.ReadAllBytes(args[i]));
+                meth.dumpfiles(args[i]);
             }
         }
     }

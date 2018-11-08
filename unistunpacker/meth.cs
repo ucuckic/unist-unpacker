@@ -25,7 +25,7 @@ namespace unistunpacker
 
     class meth
     {
-        public static void dumpfiles(byte[] listfile)
+        public static void dumpfiles(string listfile)
         {
             string workingdir = Directory.GetCurrentDirectory();
 
@@ -36,92 +36,91 @@ namespace unistunpacker
             int numfiles = 0;
             string archivename = "";
 
-            using (MemoryStream filestream = new MemoryStream(listfile))
+
+            using (BinaryReader streamread = new BinaryReader(File.OpenRead(listfile)))
             {
-                using (BinaryReader streamread = new BinaryReader(filestream))
+                numfolders = streamread.ReadInt32();
+                numfiles = streamread.ReadInt32();
+                int unk = streamread.ReadInt32();
+
+                Console.WriteLine("posis " + streamread.BaseStream.Position);
+
+                byte[] strprocess = streamread.ReadBytes(52);
+
+
+                archivename = Encoding.ASCII.GetString(strprocess).Replace("\0","");
+
+                Console.WriteLine("arcname " + archivename);
+
+                Console.WriteLine("posis " + streamread.BaseStream.Position);
+
+
+                //archivename = streamread.ReadString(24);
+
+
+                for (int i = 0; i < numfolders; i++)
                 {
-                    numfolders = streamread.ReadInt32();
-                    numfiles = streamread.ReadInt32();
-                    int unk = streamread.ReadInt32();
+                    //Console.WriteLine("fposst " + streamread.BaseStream.Position);
+                    Console.WriteLine("numfolders "+numfolders);
+                    filemetadata metadata = new filemetadata();
 
-                    Console.WriteLine("posis " + streamread.BaseStream.Position);
+                    metadata.isfolder = true;
 
-                    byte[] strprocess = streamread.ReadBytes(52);
+                    metadata.size1 = streamread.ReadInt32();
+                    metadata.size2 = streamread.ReadInt32();
+                    metadata.pos = streamread.ReadInt32();
 
+                    Console.WriteLine("fpos " + streamread.BaseStream.Position +" and "+metadata.size1);
 
-                    archivename = Encoding.ASCII.GetString(strprocess).Replace("\0","");
+                    string path = Encoding.ASCII.GetString(streamread.ReadBytes(116)).Replace("\0", "");
+                    //metadata.findex = streamread.ReadInt32();
+                    if(i == numfolders - 1) metadata.findex = streamread.ReadInt32();
 
-                    Console.WriteLine("arcname " + archivename);
+                    //Console.WriteLine("fsize1 " + metadata.size1);
 
-                    Console.WriteLine("posis " + streamread.BaseStream.Position);
+                    //Console.WriteLine("fsize2 " + metadata.size2);
 
+                    //Console.WriteLine("fpos " + metadata.pos);
 
-                    //archivename = streamread.ReadString(24);
+                    Console.WriteLine("fpath "+path);
 
+                    Console.WriteLine("lastfpos " + streamread.BaseStream.Position);
 
-                    for (int i = 0; i < numfolders; i++)
+                    metadata.path = path;
+
+                    folderlist.Add(metadata);
+                }
+
+                for (int i = 0, b = 0, c = 0; i < numfiles; i++, c++)
+                {
+                    filemetadata metadata = new filemetadata();
+                    metadata.size1 = streamread.ReadInt32();
+                    metadata.size2 = streamread.ReadInt32();
+                    metadata.pos = streamread.ReadInt32();
+
+                    Console.WriteLine("bvar "+b);
+
+                    Console.WriteLine("mypos " + streamread.BaseStream.Position);
+
+                    string path = Encoding.ASCII.GetString(streamread.ReadBytes(52)).Replace("\0", "");
+
+                    Console.WriteLine(path);
+
+                    metadata.path = path;
+
+                    if (c >= folderlist[b].size1 )
                     {
-                        //Console.WriteLine("fposst " + streamread.BaseStream.Position);
-                        Console.WriteLine("numfolders "+numfolders);
-                        filemetadata metadata = new filemetadata();
-
-                        metadata.isfolder = true;
-
-                        metadata.size1 = streamread.ReadInt32();
-                        metadata.size2 = streamread.ReadInt32();
-                        metadata.pos = streamread.ReadInt32();
-
-                        Console.WriteLine("fpos " + streamread.BaseStream.Position +" and "+metadata.size1);
-
-                        string path = Encoding.ASCII.GetString(streamread.ReadBytes(116)).Replace("\0", "");
-                        //metadata.findex = streamread.ReadInt32();
-                        if(i == numfolders - 1) metadata.findex = streamread.ReadInt32();
-
-                        //Console.WriteLine("fsize1 " + metadata.size1);
-
-                        //Console.WriteLine("fsize2 " + metadata.size2);
-
-                        //Console.WriteLine("fpos " + metadata.pos);
-
-                        Console.WriteLine("fpath "+path);
-
-                        Console.WriteLine("lastfpos " + streamread.BaseStream.Position);
-
-                        metadata.path = path;
-
-                        folderlist.Add(metadata);
+                        Console.WriteLine(folderlist[b].size1+" numfl "+i);
+                        b++;
+                        c = 0;
                     }
 
-                    for (int i = 0, b = 0, c = 0; i < numfiles; i++, c++)
-                    {
-                        filemetadata metadata = new filemetadata();
-                        metadata.size1 = streamread.ReadInt32();
-                        metadata.size2 = streamread.ReadInt32();
-                        metadata.pos = streamread.ReadInt32();
+                    metadata.infolder = folderlist[b].path;
 
-                        Console.WriteLine("bvar "+b);
-
-                        Console.WriteLine("mypos " + streamread.BaseStream.Position);
-
-                        string path = Encoding.ASCII.GetString(streamread.ReadBytes(52)).Replace("\0", "");
-
-                        Console.WriteLine(path);
-
-                        metadata.path = path;
-
-                        if (c >= folderlist[b].size1 )
-                        {
-                            Console.WriteLine(folderlist[b].size1+" numfl "+i);
-                            b++;
-                            c = 0;
-                        }
-
-                        metadata.infolder = folderlist[b].path;
-
-                        flist.Add(metadata);
-                    }
+                    flist.Add(metadata);
                 }
             }
+            
 
             string[] br = new string[2];
 
@@ -131,39 +130,30 @@ namespace unistunpacker
             //File.WriteAllLines(Path.Combine(workingdir, "debugout@"+"test.txt"), br);
             Console.WriteLine(Path.Combine(workingdir, archivename));
 
-            byte[] archive = File.ReadAllBytes(Path.Combine(workingdir,archivename));
+            //byte[] archive = File.ReadAllBytes(Path.Combine(workingdir,archivename));
 
-            using (MemoryStream filestream = new MemoryStream(archive))
+            using (BinaryReader filestream = new BinaryReader(File.OpenRead(Path.Combine(workingdir, archivename))))
             {
-                using (BinaryReader readfile = new BinaryReader(filestream))
+
+                foreach(filemetadata file in flist)
                 {
-                    foreach(filemetadata folder in folderlist)
+                    if (file.isfolder == false)
                     {
-                        //string outpath = Path.Combine(workingdir, @"output", @folder.path);
+                        //filestream.Position = file.pos;
+                        byte[] buffer = new byte[file.size1];
+                        filestream.BaseStream.Position = file.pos;
 
-                        //new FileInfo(outpath).Directory.Create();
+                        byte[] fbytes = filestream.ReadBytes(file.size1);
+                        string outpath = Path.Combine(workingdir, @"output", @file.infolder, @file.path);
 
-                        //Console.WriteLine(outpath);
-                    }
+                        new FileInfo(outpath).Directory.Create();
 
-                    foreach(filemetadata file in flist)
-                    {
-                        if (file.isfolder == false)
-                        {
-                            readfile.BaseStream.Position = file.pos;
+                        File.WriteAllBytes(outpath,fbytes);
 
-                            byte[] fbytes = readfile.ReadBytes(file.size1);
-                            string outpath = Path.Combine(workingdir, @"output", @file.infolder, @file.path);
-
-                            new FileInfo(outpath).Directory.Create();
-
-                            File.WriteAllBytes(outpath,fbytes);
-
-                            Console.WriteLine(outpath);
-                        }
-                        
+                        Console.WriteLine(outpath);
                     }
                 }
+                
             }
 
             return;
