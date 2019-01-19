@@ -19,15 +19,6 @@ namespace unistunpacker
         public int numfiles = 0;
         public int unk = 0;
         public string archivename = "";
-        /*
-        filearc(string archivename, int numfolders, int numfiles = 0)
-        {
-            this.numfolders = numfolders;
-            this.numfiles = numfiles;
-            this.archivename = archivename;
-        }
-        */
-
 
 
         public byte[] ToArray()
@@ -121,7 +112,7 @@ namespace unistunpacker
 
         public int size1 = 0; //if the entry is a folder this is the number of files
         public int size2 = 0; //if the entry is a folder this is the total number of files incrementally
-        public int pos = 0; //if the entry is a folder this is the offset of the first file in that folder
+        public int pos = 0; //if the entry is a folder this is the combined filesize of all contained files
 
         public int something = 0;
 
@@ -145,6 +136,8 @@ namespace unistunpacker
         {
             string workingdir = Directory.GetCurrentDirectory();
 
+            string pathname = new DirectoryInfo(inputdir).Name;
+
             int filepos = 0;
 
             //workingdir = Path.Combine(workingdir, inputdir);
@@ -152,12 +145,12 @@ namespace unistunpacker
             filearc newfile = new filearc();
 
             newfile.binaryfiledir = binfile;
-
+            
             filemetadata rootfolder = new filemetadata();
             rootfolder.size1 = Directory.GetFiles(inputdir).Length;
             rootfolder.path = inputdir;
-
-            newfile.folderlist.Add(rootfolder);
+            
+            //newfile.folderlist.Add(rootfolder);
 
             Console.WriteLine(inputdir + " in ");
 
@@ -166,60 +159,57 @@ namespace unistunpacker
             string[] allfiles = Directory.GetFiles(inputdir, "*.*", SearchOption.AllDirectories);
             string[] allfolders = Directory.GetDirectories(inputdir, "*.*", SearchOption.AllDirectories);
 
-            for (int z = 0, k=0; z < allfolders.Length; z++)
+            for (int z = 0; z < allfolders.Length; z++)
             {
-                k++;
-                newfile.numfolders++;
+                //newfile.numfolders++;
             }
 
-            newfile.numfolders++;
+           //newfile.numfolders++;
 
             newfile.numfiles = allfiles.Length;
 
-            int folderpos = 0;
-
             for (int i = 0, j = 0; i < allfolders.Length; i++)
             {
+                string folpathstr = allfolders[i].Substring(inputdir.IndexOf(pathname)+pathname.Length+1,allfolders[i].Length-inputdir.IndexOf(pathname)-(pathname.Length+1));
                 if(i==0)
                 {
-                    j += rootfolder.size1;
+                    //j += rootfolder.size1;
                 }
 
                 Console.WriteLine(" fo " + allfolders[i]);
-                /*
-                for (int b = 0; b < allfiles.Length; b++)
-                {
-                    if (allfolders[i] == newfile.filelist[b].infolder)
-                    {
-                        folderpos += newfile.filelist[b].pos;
-                    }
-                }
-                */
+
                 filemetadata folder = new filemetadata();
 
-                folder.path = allfolders[i];
+                folder.path = folpathstr;
 
                 folder.size1 = Directory.GetFiles(allfolders[i]).Length;
+
+                Console.WriteLine(allfolders[i]+" len "+folder.size1);
+
                 folder.size2 = j;
 
                 Console.WriteLine(" fo " + allfolders[i]);
 
-                folder.pos = folderpos;
-
-                newfile.folderlist.Add(folder);
+                if(folder.size1 > 0 ) newfile.folderlist.Add(folder);
 
                 j += folder.size1;
 
-                Console.WriteLine("folder size " + folder.size1 + "folder size2 " + folder.size2 + " folder path " + folder.path + " what " + newfile.folderlist.Count);
+                Console.WriteLine("folder size " + folder.size1 + " folder size2 " + folder.size2 + " folder path " + folder.path + " what " + newfile.folderlist.Count);
             }
+
+            int fpos = 0;
 
             foreach(filemetadata folder in newfile.folderlist)
             {
-                folder.pos = folderpos;
+                folder.pos = fpos;
 
-                Console.WriteLine(folderpos);
+                Console.WriteLine("1");
 
-                string[] folfiles = Directory.GetFiles(folder.path);
+                Console.WriteLine("should be  "+ inputdir+" potentially also "+ folder.path+" literaly me "+ Path.Combine(inputdir, folder.path));
+
+                string[] folfiles = Directory.GetFiles(Path.Combine(inputdir,folder.path));
+
+                Console.WriteLine("2 len"+folfiles.Length);
 
                 for (int i = 0; i < folfiles.Length; i++)
                 {
@@ -244,9 +234,11 @@ namespace unistunpacker
 
                     filepos += file.size1;
 
-                    folderpos += 64;
+                    fpos += file.size1;
                 }
             }
+
+            newfile.numfolders = newfile.folderlist.Count;
 
 
             //Console.WriteLine("past for " + "files " + allfiles.Length + " folders " + allfolders.Length + " rootfolder " + rootfolder.path);

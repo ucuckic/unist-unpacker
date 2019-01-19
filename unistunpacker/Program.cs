@@ -11,9 +11,13 @@ namespace unistunpacker
     {
         static void Main(string[] args)
         {
+            List<string> inputfolders = new List<string>();
+            string inputdir = "";
+
             string buildfiledir = "";
             string outputdir = "";
             string binfile = "";
+            bool pack = false;
             if (args.Length > 0)
             {
                 for (int i = 0; i < args.Length; i++)
@@ -22,22 +26,19 @@ namespace unistunpacker
                     //Console.WriteLine(args.Length+" "+arg);
                     switch (arg)
                     {
-                        case "-pack":
-                            Console.WriteLine("it be like it do");
-
-                            buildfiledir = @args[i + 1];
-                            outputdir = @args[i + 2];
-                            binfile = @args[i + 3];
-
-                            meth.buildfiles(buildfiledir,outputdir,binfile);
-
-                            i += 3;
-                            break;
                         case "-input":
-                            //buildfiledir = @args[i + 1];
+                            //inputfolders.Add(@args[i + 1]);
+                            inputdir = @args[i + 1];
+                            i++;
                             break;
                         case "-output":
-                            //outputdir = @args[i + 1];
+                            outputdir = @args[i + 1];
+                            binfile = @args[i + 2];
+                            i+=2;
+                            break;
+                        case "-pack":
+                            Console.WriteLine("it be like it do");
+                            pack = true;
                             break;
                         default:
                             for (int b = 0; b < args.Length; b++)
@@ -47,6 +48,8 @@ namespace unistunpacker
                             break;
                     }
                 }
+
+                if(pack) meth.buildfiles(inputdir, outputdir, binfile);
             }
             else
             {
