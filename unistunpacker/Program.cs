@@ -14,6 +14,8 @@ namespace unistunpacker
             List<string> inputfolders = new List<string>();
             string inputdir = "";
 
+            bool firstfol = false;
+
             string buildfiledir = "";
             string outputdir = "";
             string binfile = "";
@@ -26,9 +28,12 @@ namespace unistunpacker
                     //Console.WriteLine(args.Length+" "+arg);
                     switch (arg)
                     {
+                        case "-includein":
+                            firstfol = true;
+                            break;
                         case "-input":
-                            //inputfolders.Add(@args[i + 1]);
-                            inputdir = @args[i + 1];
+                            inputfolders.Add(@args[i + 1]);
+                            //inputdir = @args[i + 1];
                             i++;
                             break;
                         case "-output":
@@ -43,13 +48,22 @@ namespace unistunpacker
                         default:
                             for (int b = 0; b < args.Length; b++)
                             {
-                                meth.dumpfiles(File.ReadAllBytes(args[b]));
+                                FileAttributes attr = File.GetAttributes(@args[b]);
+
+                                if ((attr & FileAttributes.Directory) == FileAttributes.Directory)
+                                {
+                                    Console.WriteLine("invalid input - folder");
+                                    continue;
+                                }
+                                
+
+                                meth.dumpfiles(args[b]);
                             }
                             break;
                     }
                 }
 
-                if(pack) meth.buildfiles(inputdir, outputdir, binfile);
+                if(pack) meth.buildfiles(inputfolders, outputdir, binfile, firstfol);
             }
             else
             {

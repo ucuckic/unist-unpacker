@@ -19,7 +19,13 @@ namespace unistunpacker
         public int numfiles = 0;
         public int unk = 0;
         public string archivename = "";
+        private int incrementalpos = 0;
 
+        public int getallsize()
+        {
+            Console.WriteLine("INCREMENTAL " + incrementalpos);
+            return incrementalpos;
+        }
 
         public byte[] ToArray()
         {
@@ -27,7 +33,7 @@ namespace unistunpacker
 
             byte[] header = new byte[64];
 
-            byte[] dirstrbyte = Encoding.UTF8.GetBytes(binaryfiledir);
+            byte[] dirstrbyte = Encoding.UTF8.GetBytes(new DirectoryInfo(binaryfiledir).Name);
 
             using (MemoryStream filestream = new MemoryStream(header))
             {
@@ -66,10 +72,19 @@ namespace unistunpacker
                 }
             }
 
-            foreach (filemetadata file in filelist)
+            uint fpos = 0;
+            for (int i = 0; i < filelist.Count; i++)
             {
+
+                filemetadata file = filelist[i];
+
                 byte[] entry = new byte[64];
                 byte[] filepath = Encoding.UTF8.GetBytes(file.path);
+
+                if(i > 0)
+                {
+                    file.pos = fpos;
+                }
 
                 using (MemoryStream filestream = new MemoryStream(entry))
                 {
@@ -87,6 +102,8 @@ namespace unistunpacker
                         arraylist.Add(entry);
                     }
                 }
+
+                fpos += file.size1;
             }
 
             byte[] construct = arraylist.SelectMany(a => a).ToArray();
@@ -110,15 +127,19 @@ namespace unistunpacker
 
         public string infolder = "";
 
-        public int size1 = 0; //if the entry is a folder this is the number of files
-        public int size2 = 0; //if the entry is a folder this is the total number of files incrementally
-        public int pos = 0; //if the entry is a folder this is the combined filesize of all contained files
+        public uint size1 = 0; //if the entry is a folder this is the number of files
+        public uint size2 = 0; //if the entry is a folder this is the total number of files incrementally
+        public uint pos = 0; //if the entry is a folder this is the combined filesize of all contained files
 
-        public int something = 0;
+        public uint something = 0;
 
-        public int findex = 0;
+        public uint findex = 0;
 
         public byte[] fdata = new byte[0];
+
+        public string associated_indir = "";
+
+        public List<string> folfiles = new List<string>();
     }
 
     class meth
@@ -132,84 +153,106 @@ namespace unistunpacker
             Console.WriteLine("saved to " + outputdir);
         }
 
-        public static void buildfiles(string @inputdir, string @outputdir, string binfile)
+        public static void buildfiles(List<String> @inputdirlist, string @outputdir, string binfile, bool firstfol = false)
         {
             string workingdir = Directory.GetCurrentDirectory();
-
-            string pathname = new DirectoryInfo(inputdir).Name;
-
-            int filepos = 0;
-
-            //workingdir = Path.Combine(workingdir, inputdir);
 
             filearc newfile = new filearc();
 
             newfile.binaryfiledir = binfile;
-            
-            filemetadata rootfolder = new filemetadata();
-            rootfolder.size1 = Directory.GetFiles(inputdir).Length;
-            rootfolder.path = inputdir;
-            
-            //newfile.folderlist.Add(rootfolder);
 
-            Console.WriteLine(inputdir + " in ");
-
-            Directory.CreateDirectory(inputdir);
-
-            string[] allfiles = Directory.GetFiles(inputdir, "*.*", SearchOption.AllDirectories);
-            string[] allfolders = Directory.GetDirectories(inputdir, "*.*", SearchOption.AllDirectories);
-
-            for (int z = 0; z < allfolders.Length; z++)
+            uint filepos = 0;
+            uint fpos = 0;
+            uint j = 0; //filecnt related
+            //for (int indirs = 0; indirs < inputdirlist.Count; indirs++)
+            foreach (string inputdir in inputdirlist)
             {
-                //newfile.numfolders++;
-            }
+                string pathname = new DirectoryInfo(inputdir).Name;
 
-           //newfile.numfolders++;
+                Console.WriteLine(inputdir + " in ");
 
-            newfile.numfiles = allfiles.Length;
+                Directory.CreateDirectory(inputdir);
 
-            for (int i = 0, j = 0; i < allfolders.Length; i++)
-            {
-                string folpathstr = allfolders[i].Substring(inputdir.IndexOf(pathname)+pathname.Length+1,allfolders[i].Length-inputdir.IndexOf(pathname)-(pathname.Length+1));
-                if(i==0)
+                string[] allfiles = Directory.GetFiles(inputdir, "*.*", SearchOption.AllDirectories);
+                string[] allfolders = Directory.GetDirectories(inputdir, "*.*", SearchOption.AllDirectories);
+
+                newfile.numfiles += allfiles.Length;
+
+                for (int i = 0; i < allfolders.Length; i++)
                 {
-                    //j += rootfolder.size1;
+                    string folpathstr = (firstfol) ? allfolders[i].Substring(inputdir.IndexOf(pathname), allfolders[i].Length - inputdir.IndexOf(pathname)) : allfolders[i].Substring(inputdir.IndexOf(pathname) + pathname.Length + 1, allfolders[i].Length - inputdir.IndexOf(pathname) - (pathname.Length + 1));
+
+                    Console.WriteLine(" fo " + allfolders[i]+" fopathstr "+folpathstr);
+
+                    filemetadata folder = new filemetadata();
+
+                    folder.path = folpathstr;
+
+                    folder.size1 = Convert.ToUInt32(Directory.GetFiles(allfolders[i]).Length);
+
+                    Console.WriteLine(allfolders[i] + " len " + folder.size1);
+
+                    folder.size2 = j;
+
+                    Console.WriteLine(" fo " + allfolders[i]);
+                    
+                    folder.associated_indir = inputdir;
+
+                    string usepath = (firstfol)? Path.Combine(Directory.GetParent(folder.associated_indir).FullName, folder.path) : Path.Combine(folder.associated_indir, folder.path);
+
+                    Console.WriteLine("asspath " + usepath + " and path " + folder.path+" usepath "+usepath);
+
+                    //System.Environment.Exit(0);
+
+                    string[] folfiles = Directory.GetFiles(usepath);
+
+                    if (folder.size1 > 0)
+                    {
+                        int existindex = newfile.folderlist.FindIndex(item => item.path == folder.path);
+
+                        Console.WriteLine("existi "+ existindex);
+
+                        //this shit doesnt even work
+                        if (existindex > -1)
+                        {
+                            //merge folder contents
+
+                            newfile.folderlist[existindex].size1 += folder.size1;
+
+                            newfile.folderlist[existindex].folfiles.AddRange(folfiles.ToList());
+                        }
+                        else
+                        {
+                            folder.folfiles.AddRange(folfiles.ToList());
+
+                            newfile.folderlist.Add(folder);
+                        }
+                    }
+
+
+                    j += folder.size1;
+
+                    Console.WriteLine("folder size " + folder.size1 + " folder size2 " + folder.size2 + " folder path " + folder.path + " what " + newfile.folderlist.Count);
                 }
 
-                Console.WriteLine(" fo " + allfolders[i]);
+                newfile.numfolders = newfile.folderlist.Count;
 
-                filemetadata folder = new filemetadata();
-
-                folder.path = folpathstr;
-
-                folder.size1 = Directory.GetFiles(allfolders[i]).Length;
-
-                Console.WriteLine(allfolders[i]+" len "+folder.size1);
-
-                folder.size2 = j;
-
-                Console.WriteLine(" fo " + allfolders[i]);
-
-                if(folder.size1 > 0 ) newfile.folderlist.Add(folder);
-
-                j += folder.size1;
-
-                Console.WriteLine("folder size " + folder.size1 + " folder size2 " + folder.size2 + " folder path " + folder.path + " what " + newfile.folderlist.Count);
             }
 
-            int fpos = 0;
 
-            foreach(filemetadata folder in newfile.folderlist)
+            foreach (filemetadata folder in newfile.folderlist)
             {
+                string[] folfiles = folder.folfiles.ToArray();
+
                 folder.pos = fpos;
 
-                Console.WriteLine("1");
+                Console.WriteLine("pos "+folder.pos);
 
-                Console.WriteLine("should be  "+ inputdir+" potentially also "+ folder.path+" literaly me "+ Path.Combine(inputdir, folder.path));
+                Console.WriteLine("should be \\" + folder.associated_indir + "\\ potentially also \\" + folder.path + "\\ literaly me \\" + Path.Combine(folder.associated_indir, folder.path));
 
-                string[] folfiles = Directory.GetFiles(Path.Combine(inputdir,folder.path));
+                Console.WriteLine("2 len" + folfiles.Length);
 
-                Console.WriteLine("2 len"+folfiles.Length);
+                string pathname = new DirectoryInfo(folder.associated_indir).Name;
 
                 for (int i = 0; i < folfiles.Length; i++)
                 {
@@ -219,35 +262,47 @@ namespace unistunpacker
 
                     file.fdata = File.ReadAllBytes(folfiles[i]);
 
-                    file.size1 = file.fdata.Length;
-                    file.size2 = file.fdata.Length;
+                    file.size1 = Convert.ToUInt32(file.fdata.Length);
+                    file.size2 = Convert.ToUInt32(file.fdata.Length);
 
                     file.path = Path.GetFileName(folfiles[i]);
 
-                    file.infolder = Path.GetDirectoryName(folfiles[i]);
+                    file.infolder = (firstfol) ? folfiles[i].Substring(folder.associated_indir.IndexOf(pathname) + pathname.Length + 1, folfiles[i].Length - folder.associated_indir.IndexOf(pathname) - (pathname.Length + 1)) : folfiles[i].Substring(folder.associated_indir.IndexOf(pathname) + pathname.Length + 1, folfiles[i].Length - folder.associated_indir.IndexOf(pathname) - (pathname.Length + 1));
 
-                    file.pos = filepos;
+                    Console.WriteLine(" her u o po "+newfile.filelist.Count);
 
-                    //Console.WriteLine("file path " + file.path + " file folder " + file.infolder);
+                    Console.WriteLine("file path " + file.path + " file folder " + file.infolder+" fofiles len "+folfiles.Length);
 
-                    newfile.filelist.Add(file);
+                    int existindex = newfile.filelist.FindIndex(item => item.path == file.path && item.infolder == file.infolder);
 
-                    filepos += file.size1;
+                    Console.WriteLine("existi file " + existindex+" path "+file.path+" inf "+ file.infolder);
+                    Console.WriteLine("fpathmaster "+ folfiles[i]+" len "+file.fdata.Length);
 
-                    fpos += file.size1;
+                    //this shit doesnt even work
+                    if (existindex > -1)
+                    {
+                        //merge folder contents
+
+                        //newfile.folderlist[existindex].size1 += folder.size1;
+
+                        //newfile.folderlist[existindex].folfiles.AddRange(folfiles.ToList());
+                        newfile.filelist[existindex] = file;
+                        folder.size1 -= 1;
+                    }
+                    else
+                    {
+                        newfile.filelist.Add(file);
+                    }
+
                 }
             }
-
-            newfile.numfolders = newfile.folderlist.Count;
-
-
             //Console.WriteLine("past for " + "files " + allfiles.Length + " folders " + allfolders.Length + " rootfolder " + rootfolder.path);
 
 
             new FileInfo(outputdir).Directory.Create();
             System.IO.File.WriteAllBytes(outputdir, newfile.ToArray());
             Console.WriteLine("saved to " + outputdir);
-            using (FileStream outstream = new FileStream(newfile.binaryfiledir, FileMode.OpenOrCreate))
+            using (FileStream outstream = new FileStream(newfile.binaryfiledir, FileMode.Create))
             {
                 using (BinaryWriter outfile = new BinaryWriter(outstream))
                 {
@@ -258,28 +313,40 @@ namespace unistunpacker
                     }
                 }
             }
+            
 
         }
-        public static void dumpfiles(byte[] listfile)
+        public static void dumpfiles(string listfile)
         {
             string workingdir = Directory.GetCurrentDirectory();
 
             filearc newfile = new filearc();
 
-            using (MemoryStream filestream = new MemoryStream(listfile))
+            using (FileStream filestream = File.OpenRead(listfile))
             {
                 using (BinaryReader streamread = new BinaryReader(filestream))
                 {
                     newfile.numfolders = streamread.ReadInt32();
                     newfile.numfiles = streamread.ReadInt32();
                     int unk = streamread.ReadInt32();
-
                     Console.WriteLine("posis " + streamread.BaseStream.Position);
 
                     byte[] strprocess = streamread.ReadBytes(52);
-
-
                     newfile.archivename = Encoding.UTF8.GetString(strprocess).TrimEnd('\0');
+
+                    try
+                    {
+                        if (!File.Exists(Path.Combine(workingdir, newfile.archivename)))
+                        {
+                            Console.WriteLine("binary file " + newfile.archivename + " not found");
+                            return;
+                        }
+                    }
+                    catch(ArgumentException)
+                    {
+                        Console.WriteLine("binary file path invalid");
+                        return;
+                    }
 
                     Console.WriteLine("arcname " + newfile.archivename);
 
@@ -297,15 +364,15 @@ namespace unistunpacker
 
                         metadata.isfolder = true;
 
-                        metadata.size1 = streamread.ReadInt32();
-                        metadata.size2 = streamread.ReadInt32();
-                        metadata.pos = streamread.ReadInt32();
+                        metadata.size1 = streamread.ReadUInt32();
+                        metadata.size2 = streamread.ReadUInt32();
+                        metadata.pos = streamread.ReadUInt32();
 
                         Console.WriteLine("fpos " + streamread.BaseStream.Position +" and "+metadata.size1);
 
                         string path = Encoding.UTF8.GetString(streamread.ReadBytes(116)).TrimEnd('\0');
                         //metadata.findex = streamread.ReadInt32();
-                        if (i == newfile.numfolders - 1) metadata.findex = streamread.ReadInt32();
+                        if (i == newfile.numfolders - 1) metadata.findex = streamread.ReadUInt32();
 
                         //Console.WriteLine("fsize1 " + metadata.size1);
 
@@ -326,9 +393,9 @@ namespace unistunpacker
                         for (int i = 0; i < folder.size1; i++)
                         {
                             filemetadata metadata = new filemetadata();
-                            metadata.size1 = streamread.ReadInt32();
-                            metadata.size2 = streamread.ReadInt32();
-                            metadata.pos = streamread.ReadInt32();
+                            metadata.size1 = streamread.ReadUInt32();
+                            metadata.size2 = streamread.ReadUInt32();
+                            metadata.pos = streamread.ReadUInt32();
 
                             Console.WriteLine("mypos " + streamread.BaseStream.Position);
 
@@ -355,9 +422,9 @@ namespace unistunpacker
            // File.WriteAllLines(Path.Combine(workingdir, "debugout@"+"test.txt"), br);
             Console.WriteLine(Path.Combine(workingdir, newfile.archivename));
 
-            byte[] archive = File.ReadAllBytes(Path.Combine(workingdir, newfile.archivename));
+            //byte[] archive = File.ReadAllBytes(Path.Combine(workingdir, newfile.archivename));
 
-            using (MemoryStream filestream = new MemoryStream(archive))
+            using (FileStream filestream = File.OpenRead(Path.Combine(workingdir, newfile.archivename)))
             {
                 using (BinaryReader readfile = new BinaryReader(filestream))
                 {
@@ -376,7 +443,7 @@ namespace unistunpacker
                         {
                             readfile.BaseStream.Position = file.pos;
 
-                            byte[] fbytes = readfile.ReadBytes(file.size1);
+                            byte[] fbytes = readfile.ReadBytes( Convert.ToInt32(file.size1) );
                             string outpath = Path.Combine(workingdir, @"output", @file.infolder, @file.path);
 
                             new FileInfo(outpath).Directory.Create();
