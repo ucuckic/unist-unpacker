@@ -27,11 +27,11 @@ namespace unistunpacker
             return incrementalpos;
         }
 
-        public byte[] ToArray()
+        public byte[] ToArray(bool uni2 = false)
         {
             List<byte[]> arraylist = new List<byte[]>();
 
-            byte[] header = new byte[64];
+            byte[] header = new byte[0x40];
 
             byte[] dirstrbyte = Encoding.UTF8.GetBytes(new DirectoryInfo(binaryfiledir).Name);
 
@@ -53,7 +53,7 @@ namespace unistunpacker
 
             foreach (filemetadata folder in folderlist)
             {
-                byte[] entry = new byte[128];
+                byte[] entry = new byte[0x80];
                 byte[] folderpath = Encoding.UTF8.GetBytes(folder.path);
 
                 using (MemoryStream filestream = new MemoryStream(entry))
@@ -78,7 +78,8 @@ namespace unistunpacker
 
                 filemetadata file = filelist[i];
 
-                byte[] entry = new byte[64];
+                int entry_size = (uni2)? 0x50 : 0x40;
+                byte[] entry = new byte[entry_size];
                 byte[] filepath = Encoding.UTF8.GetBytes(file.path);
 
                 if(i > 0)
@@ -153,7 +154,7 @@ namespace unistunpacker
             Console.WriteLine("saved to " + outputdir);
         }
 
-        public static void buildfiles(List<String> @inputdirlist, string @outputdir, string binfile, bool firstfol = false)
+        public static void buildfiles(List<String> @inputdirlist, string @outputdir, string binfile, bool firstfol = false, bool uni2 = false)
         {
             string workingdir = Directory.GetCurrentDirectory();
 
@@ -316,7 +317,7 @@ namespace unistunpacker
             
 
         }
-        public static void dumpfiles(string listfile)
+        public static void dumpfiles(string listfile, bool uni2 = false)
         {
             string workingdir = Directory.GetCurrentDirectory();
 
@@ -326,26 +327,30 @@ namespace unistunpacker
             {
                 using (BinaryReader streamread = new BinaryReader(filestream))
                 {
-                    newfile.numfolders = streamread.ReadInt32();
-                    newfile.numfiles = streamread.ReadInt32();
-                    int unk = streamread.ReadInt32();
+                    newfile.numfolders = streamread.ReadInt32(); //number of folders
+                    newfile.numfiles = streamread.ReadInt32(); //number of files
+                    int bin_size = streamread.ReadInt32(); //filesize of the merged binary file
                     Console.WriteLine("posis " + streamread.BaseStream.Position);
 
                     byte[] strprocess = streamread.ReadBytes(52);
                     newfile.archivename = Encoding.UTF8.GetString(strprocess).TrimEnd('\0');
 
-                    try
+                    Console.WriteLine("verifying binary filename");
+                    if (!File.Exists(newfile.archivename))
                     {
-                        if (!File.Exists(Path.Combine(workingdir, newfile.archivename)))
+                        Console.WriteLine("binary file " + newfile.archivename + " could not be found in directory");
+                        return;
+                    }
+                    else
+                    {
+                        FileInfo binary_info = new FileInfo(newfile.archivename);
+                        if (binary_info.Length != bin_size)
                         {
-                            Console.WriteLine("binary file " + newfile.archivename + " not found");
+                            Console.WriteLine("filesize mismatch: expected " + bin_size + " got " + binary_info.Length);
                             return;
                         }
-                    }
-                    catch(ArgumentException)
-                    {
-                        Console.WriteLine("binary file path invalid");
-                        return;
+
+
                     }
 
                     Console.WriteLine("arcname " + newfile.archivename);
@@ -399,7 +404,8 @@ namespace unistunpacker
 
                             Console.WriteLine("mypos " + streamread.BaseStream.Position);
 
-                            string path = Encoding.UTF8.GetString(streamread.ReadBytes(52)).TrimEnd('\0');
+                            int path_len = (uni2) ? 68 : 52;
+                            string path = Encoding.UTF8.GetString(streamread.ReadBytes(path_len)).TrimEnd('\0');
 
                             Console.WriteLine(path);
 
@@ -428,35 +434,92 @@ namespace unistunpacker
             {
                 using (BinaryReader readfile = new BinaryReader(filestream))
                 {
-                    foreach(filemetadata folder in newfile.folderlist)
+                    foreach (filemetadata folder in newfile.folderlist)
                     {
                         string outpath = Path.Combine(workingdir, @"output", @folder.path);
 
                         new FileInfo(@outpath).Directory.Create();
 
-                        Console.WriteLine(outpath+" folnum "+newfile.folderlist.Count+" foldpath "+folder.path);
+                        Console.WriteLine(outpath + " folnum " + newfile.folderlist.Count + " foldpath " + folder.path);
                     }
 
-                    foreach(filemetadata file in newfile.filelist)
+                    foreach (filemetadata file in newfile.filelist)
                     {
                         if (file.isfolder == false)
                         {
                             readfile.BaseStream.Position = file.pos;
 
-                            byte[] fbytes = readfile.ReadBytes( Convert.ToInt32(file.size1) );
+                            //byte[] fbytes = readfile.ReadBytes(file.size1);
                             string outpath = Path.Combine(workingdir, @"output", @file.infolder, @file.path);
-
                             new FileInfo(outpath).Directory.Create();
 
-                            File.WriteAllBytes(outpath,fbytes);
+                            using (BinaryWriter out_write = new BinaryWriter(File.OpenWrite(outpath)))
+                            {
+                                uint chunk_size = 1073741824;
+                                uint chunk_div = file.size1 / chunk_size;
+                                while (out_write.BaseStream.Position < file.size1)
+                                {
 
-                            Console.WriteLine("infolder "+file.infolder+" filepath "+file.path+" outpath "+outpath);
+                                    while (chunk_div > 0)
+                                    {
+                                        //uint chunk_mod = file.size1 % chunk_size;
+                                        //uint total_size = (chunk_div * chunk_size) + chunk_mod;
+                                        //Console.WriteLine("cdiv "+chunk_div+" readfpos "+readfile.BaseStream.Position+" outfpos "+out_write.BaseStream.Position);
+                                        out_write.Write(readfile.ReadBytes((int)chunk_size));
+
+                                        chunk_div -= chunk_size;
+                                    }
+
+
+                                    uint chunk_mod = file.size1 % chunk_size;
+                                    //Console.WriteLine("remainder " + chunk_mod);
+
+                                    out_write.Write(readfile.ReadBytes((int)chunk_mod));
+                                }
+
+                            }
+
+                            //File.WriteAllBytes(outpath,fbytes);
+
+                            Console.WriteLine("infolder " + file.infolder + " filepath " + file.path + " outpath " + outpath);
                         }
                     }
                 }
             }
 
             return;
+        }
+
+        public static string print_fname(string inputstr)
+        {
+            string fix_str = inputstr;
+            char[] chr_array = fix_str.ToCharArray();
+            Array.Reverse(chr_array);
+
+            fix_str = new string(chr_array);
+
+            Console.WriteLine("fix "+fix_str);
+
+            byte[] fix_array = UnicodeEncoding.ASCII.GetBytes(fix_str);
+
+            for(int i = 0; i < fix_array.Length; i++)
+            {
+                //fix_array[i]--;
+
+                Console.WriteLine(" byte value "+ fix_array[i]+" strlen "+fix_str.Length);
+                
+                fix_array[i] -= (byte)fix_str.Length;
+            }
+
+            fix_str = UnicodeEncoding.UTF8.GetString(fix_array);
+
+            chr_array = fix_str.ToCharArray();
+
+            //Array.Reverse(chr_array);
+
+            fix_str = new string(chr_array);
+
+            return fix_str;
         }
     }
 }

@@ -20,6 +20,7 @@ namespace unistunpacker
             string outputdir = "";
             string binfile = "";
             bool pack = false;
+            bool uni2 = true;
             if (args.Length > 0)
             {
                 for (int i = 0; i < args.Length; i++)
@@ -28,6 +29,9 @@ namespace unistunpacker
                     //Console.WriteLine(args.Length+" "+arg);
                     switch (arg)
                     {
+                        case "-printname":
+                            Console.WriteLine( meth.print_fname(args[i + 1]) );
+                            break;
                         case "-includein":
                             firstfol = true;
                             break;
@@ -48,22 +52,30 @@ namespace unistunpacker
                         default:
                             for (int b = 0; b < args.Length; b++)
                             {
-                                FileAttributes attr = File.GetAttributes(@args[b]);
-
-                                if ((attr & FileAttributes.Directory) == FileAttributes.Directory)
+                                try
                                 {
-                                    Console.WriteLine("invalid input - folder");
-                                    continue;
-                                }
+                                    FileAttributes attr = File.GetAttributes(@args[b]);
                                 
 
-                                meth.dumpfiles(args[b]);
+                                    if ((attr & FileAttributes.Directory) == FileAttributes.Directory)
+                                    {
+                                        Console.WriteLine("invalid input - folder");
+                                        continue;
+                                    }
+
+
+                                    meth.dumpfiles(args[b],uni2);
+                                }
+                                catch
+                                {
+                                    Console.WriteLine("invalid file input");
+                                }
                             }
                             break;
                     }
                 }
 
-                if(pack) meth.buildfiles(inputfolders, outputdir, binfile, firstfol);
+                if(pack) meth.buildfiles(inputfolders, outputdir, binfile, firstfol,uni2);
             }
             else
             {
